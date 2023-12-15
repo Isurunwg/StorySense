@@ -23,7 +23,6 @@ storypoint_mapping = {
 
 df = pd.read_csv("./filtered_dataset2.csv")
 df = df.dropna()
-df = df.dropna()
 df = df[df["storypoint"] != 13]
 df['storypoint'] = df['storypoint'].map(storypoint_mapping)
 
@@ -35,7 +34,7 @@ print("Number of unique labels: \n", testData['storypoint'].value_counts())
 print("Number of unique labels: \n", validationData['storypoint'].value_counts())
 
 testData.to_csv('testdata.csv', index=False)
-validationData.to_csv('Tvaldata.csv', index=False)
+validationData.to_csv('valdata.csv', index=False)
 trainData.to_csv('traindata.csv', index=False)
 
 
