@@ -198,7 +198,7 @@ def testmodel(model, dataloader, set_name):
 global device
 
 DATA_FILE_PATH  = './Datasets/dataset_A.csv'
-MODEL_NAME = 'bert-base-uncased'
+MODEL_NAME = 'distilbert-base-uncased'
 MAX_SEQ_LENGTH = 128
 BATCH_SIZE = 16
 STORY_POINTS = [1, 2, 3, 5, 8]

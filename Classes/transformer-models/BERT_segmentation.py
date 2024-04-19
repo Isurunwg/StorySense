@@ -3,7 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split, TensorDataset,  RandomSampler, SequentialSampler
-from transformers import RobertaTokenizer, RobertaForSequenceClassification, AdamW, get_linear_schedule_with_warmup
+from transformers import BertTokenizer, BertForSequenceClassification, AdamW, get_linear_schedule_with_warmup
+from transformers import DistilBertTokenizer, DistilBertForSequenceClassification, AdamW, get_linear_schedule_with_warmup
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 
@@ -14,8 +15,11 @@ def preprocess_dataset(data_file):
     data = data.dropna()
     return data
 
+def split_text_into_chunks(text, chunk_size):
+    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+
 def dataset_columns(dataset):
-      return len(dataset.columns)
+    return len(dataset.columns)
 
 def prepare_data_for_model(data, number_of_cols, max_length):
     if number_of_cols == 3:
@@ -23,7 +27,6 @@ def prepare_data_for_model(data, number_of_cols, max_length):
     else:
         text = (data['title'] + " " + data['description'] + " " + data['priority'] + " " + data['type']).tolist()
 
-    # Tokenize the text
     encoded_data = tokenize_data(tokenizer, text, max_length)
 
     # Extract input_ids, attention_mask, and labels
@@ -83,7 +86,6 @@ def train_model(model, train_dataloader, optimizer, classifier_optimizer, val_da
         print(" ")
 
 
-
 def evaluate_model(model, dataloader, set_name, class_weights_eval):
     model.to(device)
     model.eval()
@@ -99,16 +101,11 @@ def evaluate_model(model, dataloader, set_name, class_weights_eval):
             # Forward pass
             outputs = model(input_ids, attention_mask=attention_mask)
             criterion = nn.CrossEntropyLoss(weight=torch.tensor([class_weights_eval[0],class_weights_eval[1], class_weights_eval[2], class_weights_eval[3], class_weights_eval[4]], dtype=torch.float32).cuda())
-
-
             loss = criterion(outputs.logits, labels)
-
             test_loss += loss.item()
-
             _, predicted_labels = torch.max(outputs.logits, 1)
             total_predictions += labels.size(0)
             correct_predictions += (predicted_labels == labels).sum().item()
-
             absolute_errors.extend(torch.abs(predicted_labels - labels).cpu().numpy())
             # mae += torch.abs(predicted_labels - labels).sum().item()
 
@@ -118,7 +115,6 @@ def evaluate_model(model, dataloader, set_name, class_weights_eval):
         avg_mae = np.mean(absolute_errors)
         # avg_mae = mae / total_predictions
         md_ae = np.median(absolute_errors)
-
         print(f'{set_name} Loss: {avg_loss:.4f} | {set_name} Accuracy: {accuracy:.2f}% | MAE: {avg_mae:.4f} | MdAE: {md_ae:.4f}')
 
 def testmodel(model, dataloader, set_name):
@@ -194,11 +190,13 @@ def testmodel(model, dataloader, set_name):
         print(f"Class {class_label}: Accuracy = {accuracy:.2%}")
 
 
-
 global device
 
-DATA_FILE_PATH  = './Datasets/dataset_A.csv'
-MODEL_NAME = 'roberta-base'
+DATA_FILE_PATH_TRAIN  = './Datasets/Aug_Data_for_training.csv'
+DATA_FILE_PATH_TEST  = './Datasets/test_data.csv'
+DATA_FILE_PATH_VALIDATION  = './Datasets/val_data.csv'
+
+MODEL_NAME = 'bert-base-uncased'
 MAX_SEQ_LENGTH = 128
 BATCH_SIZE = 16
 STORY_POINTS = [1, 2, 3, 5, 8]
@@ -214,35 +212,84 @@ LABEL_MAPPING = {
 global device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-df = preprocess_dataset(DATA_FILE_PATH)
-df = df[df['storypoint'].isin([1,2,3,5,8])]
+testData = preprocess_dataset(DATA_FILE_PATH_TEST)
+validationData = preprocess_dataset(DATA_FILE_PATH_VALIDATION)
+trainData = preprocess_dataset(DATA_FILE_PATH_TRAIN)
 
-train_dataset, tdf = train_test_split(df, test_size=0.3, random_state=42)
-val_dataset, test_dataset = train_test_split(tdf, test_size=0.5, random_state=42)
+testData['storypoint'] = testData['storypoint'].map(LABEL_MAPPING)
+validationData['storypoint'] = validationData['storypoint'].map(LABEL_MAPPING)
+trainData['storypoint'] = trainData['storypoint'].map(LABEL_MAPPING)
 
-test_dataset['storypoint'] = test_dataset['storypoint'].map(LABEL_MAPPING)
-val_dataset['storypoint'] = val_dataset['storypoint'].map(LABEL_MAPPING)
-train_dataset['storypoint'] = train_dataset['storypoint'].map(LABEL_MAPPING)
+new_rows = []
+for index, row in trainData.iterrows():
+    description = str(row['description'])
+    desc_words = description.split()
 
-tokenizer = RobertaTokenizer.from_pretrained(MODEL_NAME)
-model = RobertaForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=5, output_attentions = False, output_hidden_states = False)
+    if len(desc_words) > 15:
+        chunks = split_text_into_chunks(desc_words, 15)
+        for chunk in chunks:
+            new_row = row.copy()
+            newDesc = " ".join(chunk)
+            new_row['description'] = newDesc
+            new_rows.append(new_row)
+    else:
+        new_rows.append(row)
 
-number_of_cols = dataset_columns(df)
+train_dataset = pd.DataFrame(new_rows)
+
+new_rows = []
+for index, row in validationData.iterrows():
+    description = str(row['description'])
+    desc_words = description.split()
+
+    if len(desc_words) > 15:
+        chunks = split_text_into_chunks(desc_words, 15)
+        for chunk in chunks:
+            new_row = row.copy()
+            newDesc = " ".join(chunk)
+            new_row['description'] = newDesc
+            new_rows.append(new_row)
+    else:
+        new_rows.append(row)
+
+val_dataset = pd.DataFrame(new_rows)
+
+new_rows = []
+for index, row in testData.iterrows():
+    description = str(row['description'])
+    desc_words = description.split()
+
+    if len(desc_words) > 15:
+        chunks = split_text_into_chunks(desc_words, 15)
+        for chunk in chunks:
+            new_row = row.copy()
+            newDesc = " ".join(chunk)
+            new_row['description'] = newDesc
+            new_rows.append(new_row)
+    else:
+        new_rows.append(row)
+
+test_dataset = pd.DataFrame(new_rows)
+
+tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
+model = BertForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=5, output_attentions = False, output_hidden_states = False)
+
+number_of_cols = dataset_columns(testData)
 
 class_weights_train = {}
 class_weights_eval = {}
 class_weights_test = {}
 
-class_frequencies = np.unique(train_dataset['storypoint'], return_counts=True)[1]
+class_frequencies = np.unique(trainData['storypoint'], return_counts=True)[1]
 print("class_frequencies:", class_frequencies)
 for i in range(len(class_frequencies)):
     class_weights_train[i] = (class_frequencies[0] + class_frequencies[1] + class_frequencies[2] + class_frequencies[3] + class_frequencies[4]) / class_frequencies[i]
 
-class_frequencies = np.unique(val_dataset['storypoint'], return_counts=True)[1]
+class_frequencies = np.unique(validationData['storypoint'], return_counts=True)[1]
 for i in range(len(class_frequencies)):
     class_weights_eval[i]  = (class_frequencies[0] + class_frequencies[1] + class_frequencies[2] + class_frequencies[3] + class_frequencies[4])/ class_frequencies[i]
 
-class_frequencies = np.unique(test_dataset['storypoint'], return_counts=True)[1]
+class_frequencies = np.unique(testData['storypoint'], return_counts=True)[1]
 for i in range(len(class_frequencies)):
     class_weights_test[i]  = (class_frequencies[0] + class_frequencies[1] + class_frequencies[2] + class_frequencies[3] + class_frequencies[4])/ class_frequencies[i]
 
@@ -251,18 +298,18 @@ tdataset = prepare_data_for_model(train_dataset, number_of_cols, MAX_SEQ_LENGTH)
 vdataset = prepare_data_for_model(val_dataset, number_of_cols, MAX_SEQ_LENGTH)
 testdataset = prepare_data_for_model(test_dataset, number_of_cols, MAX_SEQ_LENGTH)
 
-# Define batch size and create DataLoader instances
 train_dataloader = DataLoader(tdataset, batch_size=BATCH_SIZE, shuffle=True)
 val_dataloader = DataLoader(vdataset, batch_size=BATCH_SIZE, shuffle=False)
 test_dataloader = DataLoader(testdataset, batch_size=BATCH_SIZE, shuffle=False)
 
-# optimizer = AdamW(model.parameters(), lr=2e-5)
+optimizer = AdamW(model.parameters(), lr=2e-5)
+
 model.dropout.p = 0.3
 weight_decay = 0.001
 
 optimizer = AdamW(model.parameters(),
                 lr = 2e-5, 
-                eps = 2e-5,
+                eps = 2e-5, 
                 weight_decay=weight_decay
                 )
 classifier_optimizer = AdamW(model.classifier.parameters(), lr=2e-5)
@@ -282,7 +329,7 @@ train_model(model, train_dataloader, optimizer, classifier_optimizer, val_datalo
 
 model.save_pretrained('saved_model')
 tokenizer.save_pretrained('saved_model')
-savedmodelname = "RoBERTa_model.pth"
+savedmodelname = "A_final_BERT_model2.pth"
 torch.save(model.state_dict(), savedmodelname)
 
 val_loss = evaluate_model(model, test_dataloader, "test", class_weights_test)
