@@ -282,7 +282,7 @@ train_model(model, train_dataloader, optimizer, classifier_optimizer, val_datalo
 
 model.save_pretrained('saved_model')
 tokenizer.save_pretrained('saved_model')
-savedmodelname = "BERT_model.pth"
+savedmodelname = "DistilBERT_model.pth"
 torch.save(model.state_dict(), savedmodelname)
 
 val_loss = evaluate_model(model, test_dataloader, "test", class_weights_test)
