@@ -1,8 +1,8 @@
-# SCS4224 Final Year Project in Computer Science
+# Final Year Project in Computer Science
 
-### Project title : Estimating Story Points in Scrum By Maintaining Both Accuracy and Interpretability
+### Project title : Estimating Story Points in Scrum: Balancing Accuracy and Interpretability with Explainable AI
 
-This repository provides the code used for training, evaluating and XAI methods for my reserach project.
+This repository provides the code used for training, evaluating and XAI methods for my research project.
 
 Key Components:
 
