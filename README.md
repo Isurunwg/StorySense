@@ -2,6 +2,8 @@
 
 ### Project title : Estimating Story Points in Scrum: Balancing Accuracy and Interpretability with Explainable AI
 
+![logo](logo.png "Hover Text")
+
 This repository provides the code used for training, evaluating and XAI methods for my research project.
 
 Key Components:
@@ -11,4 +13,5 @@ Key Components:
 - **Code**: The classes folder houses all the code segments used for various aspects of this research:
   _ Data preprocessing steps to prepare the text data for model training.
   _ Training scripts for different machine learning models for story point prediction. \* Code for XAI methods that provide insights into model predictions.
-  Getting Started:
+
+  - **Results**: Human-based evaluations on the accuracy outputs and XAI explanations, providing qualitative insights into how the models perform. Individual results for each model and XAI method used, detailing specific accuracy metrics and interpretability analyses.
